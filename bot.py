@@ -1,6 +1,8 @@
 import threading
 import requests
 import time
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 url = "https://funpay.com/"
 
@@ -32,17 +34,33 @@ cookies = {
     "_ga_STVL2Q8BNQ": "GS2.1.s1747074719$o86$g1$t1747078479$j1$l0$h666540499"
 }
 
+# Создаём session с адаптером повторов
+def create_session():
+    session = requests.Session()
+    retry = Retry(
+        total=3,
+        backoff_factor=0.5,
+        status_forcelist=[500, 502, 503, 504],
+        raise_on_status=False
+    )
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount("https://", adapter)
+    return session
+
 def send_requests():
+    session = create_session()
     while True:
         try:
-            response = requests.get(url, headers=headers, cookies=cookies)
+            response = session.get(url, headers=headers, cookies=cookies, timeout=5)
             print(f"Status: {response.status_code}")
-        except Exception as e:
-            print(f"Error: {e}")
+        except requests.exceptions.SSLError as ssl_err:
+            print("SSL Error:", ssl_err)
+        except requests.exceptions.RequestException as e:
+            print("Request Error:", e)
 
 # Запускаем 100 потоков
 threads = []
-for _ in range(100):
+for _ in range(10):
     t = threading.Thread(target=send_requests)
     t.daemon = True
     t.start()
